@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    container_name: marketplace-db
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./seed_data.sql:/docker-entrypoint-initdb.d/seed_data.sql
+      - ./generate_big_data.sql:/docker-entrypoint-initdb.d/generate_big_data.sql
+      - ./crud_operations.sql:/docker-entrypoint-initdb.d/crud_operations.sql
+      - ./create_indexes.sql:/docker-entrypoint-initdb.d/create_indexes.sql
+      - ./business_cases.sql:/docker-entrypoint-initdb.d/business_cases.sql
+
+
+volumes:
+  postgres_data:
