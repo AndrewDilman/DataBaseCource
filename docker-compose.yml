@@ -37,7 +37,26 @@ services:
       # Создание подписки после создания схемы
       - ./sub_create_subscription.sql:/docker-entrypoint-initdb.d/10_sub_create_subscription.sql
 
+  backup:
+    image: postgres:15
+    container_name: marketplace-backup
+    depends_on:
+      - postgres
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: admin
+      PGPASSWORD: 123
+      POSTGRES_DB: marketplace
+      CRON_MODE: loop
+    volumes:
+      - ./backup:/opt/backup:ro
+      - backups_data:/backups
+      - postgres_data:/var/lib/postgresql/data:ro
+    entrypoint: ["bash", "/opt/backup/backup.sh"]
+
 
 volumes:
   postgres_data:
   postgres_data_sub:
+  backups_data:
