@@ -1,181 +1,233 @@
--- ГЕНЕРАЦИЯ БОЛЬШОГО КОЛИЧЕСТВА ДАННЫХ (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+-- Функция для генерации случайных строк
+CREATE OR REPLACE FUNCTION random_string(length INTEGER) RETURNS TEXT AS $$
+DECLARE
+  chars TEXT := 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  result TEXT := '';
+  i INTEGER := 0;
+BEGIN
+  FOR i IN 1..length LOOP
+    result := result || substr(chars, floor(random() * length(chars) + 1)::integer, 1);
+  END LOOP;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql;
 
--- Очистка существующих данных
-TRUNCATE TABLE purchase_history, reviews, orders, goods, users, categories, addresses, pickup_points, warehouses CASCADE;
+-- Функция для генерации случайных имен
+CREATE OR REPLACE FUNCTION random_name() RETURNS TEXT AS $$
+DECLARE
+  first_names TEXT[] := ARRAY['Иван', 'Петр', 'Мария', 'Анна', 'Сергей', 'Ольга', 'Алексей', 'Елена', 'Дмитрий', 'Наталья', 'Андрей', 'Татьяна', 'Михаил', 'Светлана', 'Владимир'];
+  last_names TEXT[] := ARRAY['Иванов', 'Петров', 'Сидоров', 'Кузнецов', 'Попов', 'Васильев', 'Смирнов', 'Новиков', 'Федоров', 'Морозов', 'Волков', 'Алексеев', 'Лебедев', 'Семенов', 'Егоров'];
+BEGIN
+  RETURN first_names[floor(random() * array_length(first_names, 1) + 1)] || ' ' || last_names[floor(random() * array_length(last_names, 1) + 1)];
+END;
+$$ LANGUAGE plpgsql;
 
--- 1. Генерация адресов (10,000 записей)
+-- Функция для генерации названий товаров
+CREATE OR REPLACE FUNCTION random_product_name() RETURNS TEXT AS $$
+DECLARE
+  prefixes TEXT[] := ARRAY['Умный', 'Профессиональный', 'Домашний', 'Портативный', 'Электронный', 'Цифровой', 'Беспроводной', 'Интеллектуальный', 'Компактный', 'Стильный'];
+  products TEXT[] := ARRAY['смартфон', 'ноутбук', 'планшет', 'телевизор', 'наушники', 'часы', 'монитор', 'фотоаппарат', 'принтер', 'роутер', 'микрофон', 'динамик', 'пылесос', 'чайник', 'блендер'];
+  brands TEXT[] := ARRAY['Samsung', 'Apple', 'Xiaomi', 'Sony', 'LG', 'Philips', 'Bosch', 'Canon', 'Nikon', 'Huawei', 'Lenovo', 'Asus', 'Acer', 'HP', 'Dell'];
+BEGIN
+  RETURN brands[floor(random() * array_length(brands, 1) + 1)] || ' ' || 
+         prefixes[floor(random() * array_length(prefixes, 1) + 1)] || ' ' || 
+         products[floor(random() * array_length(products, 1) + 1)] || ' ' || 
+         floor(random() * 9000 + 1000)::text;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функция для генерации названий адресов
+CREATE OR REPLACE FUNCTION random_address() RETURNS TEXT AS $$
+DECLARE
+  cities TEXT[] := ARRAY['Москва', 'Санкт-Петербург', 'Новосибирск', 'Екатеринбург', 'Казань', 'Нижний Новгород', 'Челябинск', 'Самара', 'Омск', 'Ростов-на-Дону'];
+  streets TEXT[] := ARRAY['Ленина', 'Пушкина', 'Гагарина', 'Советская', 'Мира', 'Кирова', 'Лесная', 'Центральная', 'Молодежная', 'Школьная'];
+  types TEXT[] := ARRAY['ул.', 'пр.', 'пер.', 'б-р', 'ш.'];
+BEGIN
+  RETURN cities[floor(random() * array_length(cities, 1) + 1)] || ', ' || 
+         types[floor(random() * array_length(types, 1) + 1)] || ' ' || 
+         streets[floor(random() * array_length(streets, 1) + 1)] || ', д. ' || 
+         floor(random() * 100 + 1)::text;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Генерация категорий (фиксированный набор)
+INSERT INTO categories (name) VALUES 
+('Электроника'),
+('Бытовая техника'),
+('Компьютеры и ноутбуки'),
+('Смартфоны и гаджеты'),
+('Фото и видео'),
+('Аудиотехника'),
+('Игры и развлечения'),
+('Кухонная техника'),
+('Красота и здоровье'),
+('Автотовары')
+ON CONFLICT (name) DO NOTHING;
+
+-- Генерация адресов (1000 записей)
 INSERT INTO addresses (name)
-SELECT 
-    'г. ' || 
-    CASE (seq % 50) + 1
-        WHEN 1 THEN 'Москва'
-        WHEN 2 THEN 'Санкт-Петербург'
-        WHEN 3 THEN 'Новосибирск'
-        WHEN 4 THEN 'Екатеринбург'
-        WHEN 5 THEN 'Казань'
-        ELSE 'Город_' || ((seq % 50) + 1)
-    END || 
-    ', ул. ' || 
-    CASE (seq % 20) + 1
-        WHEN 1 THEN 'Ленина'
-        WHEN 2 THEN 'Пушкина'
-        WHEN 3 THEN 'Гагарина'
-        WHEN 4 THEN 'Мира'
-        WHEN 5 THEN 'Садовая'
-        ELSE 'Улица_' || ((seq % 20) + 1)
-    END || 
-    ', д. ' || (seq % 100 + 1)
-FROM generate_series(1, 10000) as seq;
+SELECT random_address()
+FROM generate_series(1, 1000);
 
--- 2. Генерация категорий (50 записей)
-INSERT INTO categories (name)
-SELECT 'Категория_' || seq FROM generate_series(1, 50) as seq;
-
--- 3. Генерация пользователей (100,000 записей)
+-- Генерация пользователей (1 миллион записей)
 INSERT INTO users (password_hash, name, user_type)
 SELECT 
-    md5(random()::text) as password_hash,
-    CASE 
-        WHEN seq <= 5000 THEN 'Продавец_' || seq
-        ELSE 'Покупатель_' || (seq - 5000)
-    END as name,
-    CASE 
-        WHEN seq <= 5000 THEN 'merchant'
-        ELSE 'customer'
-    END as user_type
-FROM generate_series(1, 100000) as seq;
+  md5(random()::text), -- хэш пароля
+  random_name(), -- имя
+  CASE WHEN random() < 0.2 THEN 'merchant' ELSE 'customer' END -- тип пользователя
+FROM generate_series(1, 1000000);
 
--- 4. Генерация товаров (500,000 записей) - ИСПРАВЛЕНО
+-- Генерация товаров (500 тысяч записей) с равномерным распределением по продавцам
 INSERT INTO goods (merch_id, caty_id, name)
-SELECT 
-    -- Только существующие merchant users (1-5000)
-    (random() * 4999 + 1)::int as merch_id,
-    -- Только существующие категории (1-50)
-    (random() * 49 + 1)::int as caty_id,
-    'Товар_' || seq || '_категории_' || ((random() * 49 + 1)::int)
-FROM generate_series(1, 500000) as seq;
-
--- 5. Генерация заказов (3,000,000 записей) - ИСПРАВЛЕНО
-INSERT INTO orders (user_id, good_id)
-SELECT 
-    -- Только customer users (5001-100000)
-    ((random() * 94999)::int + 5001) as user_id,
-    -- Только существующие товары (1-500000)
-    ((random() * 499999)::int + 1) as good_id
-FROM generate_series(1, 3000000) as seq;
-
--- 6. Генерация отзывов (1,000,000 записей) - ПОЛНОСТЬЮ ПЕРЕПИСАННЫЙ БЛОК
-INSERT INTO reviews (user_id, good_id, rating, comment)
-SELECT 
+WITH merchants_shuffled AS (
+  SELECT 
     u.user_id,
-    g.good_id,
-    (random() * 4 + 1)::int as rating,
-    CASE (random() * 5)::int
-        WHEN 0 THEN 'Отличный товар!'
-        WHEN 1 THEN 'Очень доволен покупкой'
-        WHEN 2 THEN 'Нормального качества'
-        WHEN 3 THEN 'Есть небольшие недостатки'
-        WHEN 4 THEN 'Не рекомендую'
-        ELSE 'Среднего качества'
-    END as comment
-FROM 
-    (SELECT user_id FROM users WHERE user_type = 'customer' ORDER BY random() LIMIT 1000000) u
-CROSS JOIN LATERAL
-    (SELECT good_id FROM goods ORDER BY random() LIMIT 1) g
-LIMIT 1000000;
+    row_number() OVER (ORDER BY random()) AS rn,
+    COUNT(*) OVER () AS total_merchants
+  FROM users u
+  WHERE u.user_type = 'merchant'
+), quotas AS (
+  SELECT 
+    user_id,
+    rn AS merchant_rn,
+    (500000 / total_merchants) + CASE WHEN rn <= (500000 % total_merchants) THEN 1 ELSE 0 END AS goods_quota
+  FROM merchants_shuffled
+), expanded AS (
+  SELECT 
+    q.user_id AS merch_id,
+    q.merchant_rn,
+    generate_series(1, q.goods_quota) AS n
+  FROM quotas q
+), categories_enum AS (
+  SELECT 
+    c.caty_id,
+    row_number() OVER (ORDER BY c.caty_id) AS rn,
+    COUNT(*) OVER () AS total_categories
+  FROM categories c
+)
+SELECT 
+  e.merch_id,
+  ce.caty_id,
+  random_product_name() AS name
+FROM expanded e
+JOIN categories_enum ce
+  ON ce.rn = 1 + (((e.merchant_rn + e.n - 2)) % ce.total_categories);
 
--- 7. Генерация истории покупок (3,000,000 записей) - ИСПРАВЛЕНО
+-- Генерация заказов (пер-пользователю с вероятностным количеством, суммарно ~500k)
+INSERT INTO orders (user_id, good_id)
+WITH customers AS (
+  SELECT user_id
+  FROM users
+  WHERE user_type = 'customer'
+),
+orders_plan AS (
+  SELECT 
+    user_id,
+    -- распределение: 40% — 0 заказов, 30% — 1, 15% — 2, 8% — 3, 4% — 4, 3% — 5
+    CASE 
+      WHEN r < 0.40 THEN 0
+      WHEN r < 0.70 THEN 1
+      WHEN r < 0.85 THEN 2
+      WHEN r < 0.93 THEN 3
+      WHEN r < 0.97 THEN 4
+      ELSE 5
+    END AS orders_count
+  FROM (
+    SELECT user_id, random() AS r FROM customers
+  ) t
+),
+expanded AS (
+  SELECT user_id, generate_series(1, orders_count) AS n
+  FROM orders_plan
+  WHERE orders_count > 0
+),
+orders_candidates AS (
+  -- Детерминированный выбор товара по хешу (равномерно по всему каталогу)
+  WITH goods_enum AS (
+    SELECT good_id, row_number() OVER (ORDER BY good_id) AS rn
+    FROM goods
+  ), goods_count AS (
+    SELECT COUNT(*) AS cnt FROM goods
+  )
+  SELECT 
+    e.user_id,
+    ge.good_id
+  FROM expanded e
+  CROSS JOIN goods_count gc
+  JOIN goods_enum ge
+    ON ge.rn = 1 + (((hashtext(e.user_id::text || ':' || e.n::text)) & 2147483647) % gc.cnt)
+),
+limited_orders AS (
+  SELECT user_id, good_id
+  FROM orders_candidates
+  ORDER BY random()
+  LIMIT 500000
+)
+SELECT user_id, good_id FROM limited_orders;
+
+-- Генерация истории покупок (дублирует данные из заказов, но с дополнительной структурой)
 INSERT INTO purchase_history (user_id, order_id)
 SELECT 
-    o.user_id,
-    o.id as order_id
-FROM orders o;
+  user_id,
+  id
+FROM orders
+WHERE random() < 0.8; -- 80% заказов попадают в историю
 
--- 8. Генерация пунктов выдачи (1,000 записей)
+-- Генерация пунктов выдачи (200 записей)
 INSERT INTO pickup_points (addr_id)
-SELECT addr_id FROM addresses WHERE addr_id <= 1000;
-
--- 9. Генерация складов (500 записей)
-INSERT INTO warehouses (addr_id)
-SELECT addr_id FROM addresses WHERE addr_id BETWEEN 1001 AND 1500;
-
--- ПРОВЕРКА СГЕНЕРИРОВАННЫХ ДАННЫХ
-SELECT 
-    'Адреса' as table_name,
-    COUNT(*) as record_count
+SELECT addr_id
 FROM addresses
-UNION ALL
-SELECT 'Категории', COUNT(*) FROM categories
-UNION ALL
-SELECT 'Пользователи', COUNT(*) FROM users
-UNION ALL
-SELECT 'Товары', COUNT(*) FROM goods
-UNION ALL
-SELECT 'Заказы', COUNT(*) FROM orders
-UNION ALL
-SELECT 'Отзывы', COUNT(*) FROM reviews
-UNION ALL
-SELECT 'История покупок', COUNT(*) FROM purchase_history
-UNION ALL
-SELECT 'Пункты выдачи', COUNT(*) FROM pickup_points
-UNION ALL
-SELECT 'Склады', COUNT(*) FROM warehouses
-ORDER BY record_count DESC;
+ORDER BY random()
+LIMIT 200;
 
--- ПРОВЕРКА СВЯЗЕЙ И ЦЕЛОСТНОСТИ ДАННЫХ
-SELECT 'Проверка целостности данных:' as check_type;
+-- Генерация складов (50 записей)
+INSERT INTO warehouses (addr_id)
+SELECT addr_id
+FROM addresses
+ORDER BY random()
+LIMIT 50;
 
--- Проверка, что нет "битых" связей
-SELECT 'Товары без продавца: ' || COUNT(*)::text as issue
-FROM goods g 
-WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.user_id = g.merch_id AND u.user_type = 'merchant')
+-- Проверим сколько уникальных пар у нас есть
+SELECT COUNT(*) as unique_user_good_pairs FROM (
+    SELECT DISTINCT user_id, good_id FROM orders
+    WHERE user_id IN (SELECT user_id FROM users WHERE user_type = 'customer')
+) AS unique_pairs;
 
-UNION ALL
-SELECT 'Заказы без покупателя: ' || COUNT(*) 
-FROM orders o 
-WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.user_id = o.user_id AND u.user_type = 'customer')
-
-UNION ALL
-SELECT 'Заказы без товара: ' || COUNT(*) 
-FROM orders o 
-WHERE NOT EXISTS (SELECT 1 FROM goods g WHERE g.good_id = o.good_id)
-
-UNION ALL
-SELECT 'Отзывы без пользователя: ' || COUNT(*) 
-FROM reviews r 
-WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.user_id = r.user_id)
-
-UNION ALL
-SELECT 'Отзывы без товара: ' || COUNT(*) 
-FROM reviews r 
-WHERE NOT EXISTS (SELECT 1 FROM goods g WHERE g.good_id = r.good_id);
-
--- ДОПОЛНИТЕЛЬНЫЕ ПРОВЕРКИ КАЧЕСТВА ДАННЫХ
-SELECT 'Дополнительные проверки:' as check_type;
-
-SELECT 'Количество продавцов: ' || COUNT(*)::text as info
-FROM users WHERE user_type = 'merchant'
-
-UNION ALL
-SELECT 'Количество покупателей: ' || COUNT(*)::text
-FROM users WHERE user_type = 'customer'
-
-UNION ALL
-SELECT 'Среднее количество товаров на продавца: ' || ROUND(AVG(product_count)::numeric, 2)::text
-FROM (
-    SELECT merch_id, COUNT(*) as product_count 
-    FROM goods 
-    GROUP BY merch_id
-) as seller_stats
-
-UNION ALL
-SELECT 'Среднее количество заказов на покупателя: ' || ROUND(AVG(order_count)::numeric, 2)::text
-FROM (
-    SELECT user_id, COUNT(*) as order_count 
+-- Генерация отзывов (случайно для части уникальных покупок)
+INSERT INTO reviews (user_id, good_id, rating, comment)
+WITH unique_orders AS (
+    SELECT DISTINCT user_id, good_id
     FROM orders 
-    GROUP BY user_id
-) as customer_stats
+    WHERE user_id IN (SELECT user_id FROM users WHERE user_type = 'customer')
+),
+sampled_reviews AS (
+    SELECT user_id, good_id
+    FROM unique_orders
+    WHERE random() < 0.35 -- ~35% покупок получают отзыв
+)
+SELECT 
+    user_id,
+    good_id,
+    (random() * 4 + 1)::integer as rating,
+    CASE (random() * 4)::integer
+        WHEN 0 THEN 'Отличный товар! Рекомендую'
+        WHEN 1 THEN 'Хорошее качество, доволен покупкой'
+        WHEN 2 THEN 'Нормальный товар за свои деньги'
+        WHEN 3 THEN 'Есть небольшие недочеты, но в целом неплохо'
+        ELSE 'Не советую, качество оставляет желать лучшего'
+    END as comment
+FROM sampled_reviews
+ON CONFLICT (user_id, good_id) DO NOTHING;
 
-UNION ALL
-SELECT 'Средний рейтинг товаров: ' || ROUND(AVG(rating)::numeric, 2)::text
-FROM reviews;
+-- Обновление статистики для оптимизатора запросов
+ANALYZE;
+
+-- Вывод статистики
+SELECT 
+  (SELECT COUNT(*) FROM users) as total_users,
+  (SELECT COUNT(*) FROM users WHERE user_type = 'customer') as customers,
+  (SELECT COUNT(*) FROM users WHERE user_type = 'merchant') as merchants,
+  (SELECT COUNT(*) FROM goods) as total_goods,
+  (SELECT COUNT(*) FROM orders) as total_orders,
+  (SELECT COUNT(*) FROM reviews) as total_reviews,
+  (SELECT COUNT(*) FROM purchase_history) as total_purchase_history;
