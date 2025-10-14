@@ -17,7 +17,27 @@ services:
       - ./crud_operations.sql:/docker-entrypoint-initdb.d/crud_operations.sql
       - ./create_indexes.sql:/docker-entrypoint-initdb.d/create_indexes.sql
       - ./business_cases.sql:/docker-entrypoint-initdb.d/business_cases.sql
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10"]
+
+  postgres_subscriber:
+    image: postgres:15
+    container_name: marketplace-subscriber
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_sub:/var/lib/postgresql/data
+      # Схема должна быть идентичной публикации
+      - ./init.sql:/docker-entrypoint-initdb.d/00_init_schema.sql
+      # Создание подписки после создания схемы
+      - ./sub_create_subscription.sql:/docker-entrypoint-initdb.d/10_sub_create_subscription.sql
 
 
 volumes:
   postgres_data:
+  postgres_data_sub:
