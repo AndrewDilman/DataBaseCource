@@ -19,14 +19,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql
       - ./generate_big_data.sql:/docker-entrypoint-initdb.d/02_generate_big_data.sql
-      - ./business_cases.sql:/sripts/a.sql
+      - ./business_cases.sql:/docker-entrypoint-initdb.d/03_business_cases.sql
     command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10"]
 
   postgres_subscriber:
     image: postgres:15
     container_name: marketplace-subscriber
-    depends_on:
-      - postgres
     environment:
       POSTGRES_DB: marketplace
       POSTGRES_USER: admin
@@ -39,12 +37,11 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/00_init_schema.sql
       # Создание подписки после создания схемы
       - ./sub_create_subscription.sql:/docker-entrypoint-initdb.d/10_sub_create_subscription.sql
+    command: ["bash", "-c", "sleep 60 && docker-entrypoint.sh postgres -c 'wal_level=logical' -c 'max_wal_senders=10' -c 'max_replication_slots=10'"]
 
   backup:
     image: postgres:15
     container_name: marketplace-backup
-    depends_on:
-      - postgres
     environment:
       PGHOST: postgres
       PGPORT: 5432
@@ -56,7 +53,7 @@ services:
       - ./backup:/opt/backup:ro
       - backups_data:/backups
       - postgres_data:/var/lib/postgresql/data:ro
-    entrypoint: ["bash", "/opt/backup/backup.sh"]
+    entrypoint: ["bash", "-c", "sleep 90 && bash /opt/backup/backup.sh"]
 
 
 volumes:
