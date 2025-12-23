@@ -113,28 +113,32 @@ FROM expanded e
 JOIN categories_enum ce
   ON ce.rn = 1 + (((e.merchant_rn + e.n - 2)) % ce.total_categories);
 
--- Генерация заказов (пер-пользователю с вероятностным количеством, суммарно ~500k)
+-- Генерация заказов (увеличено до 3.5 миллионов записей)
 INSERT INTO orders (user_id, good_id)
 WITH customers AS (
   SELECT user_id
   FROM users
   WHERE user_type = 'customer'
 ),
+-- Создаем план для более высокой частоты заказов
 orders_plan AS (
   SELECT 
     user_id,
-    -- распределение: 40% — 0 заказов, 30% — 1, 15% — 2, 8% — 3, 4% — 4, 3% — 5
+    -- новое распределение: 5% — 0 заказов, 10% — 1, 10% — 2, 15% — 3, 15% — 4, 15% — 5, 10% — 6-10, 10% — 11-20, 5% — 21-30
     CASE 
-      WHEN r < 0.40 THEN 0
-      WHEN r < 0.70 THEN 1
-      WHEN r < 0.85 THEN 2
-      WHEN r < 0.93 THEN 3
-      WHEN r < 0.97 THEN 4
-      ELSE 5
+      WHEN r < 0.05 THEN 0
+      WHEN r < 0.15 THEN 1
+      WHEN r < 0.25 THEN 2
+      WHEN r < 0.40 THEN 3
+      WHEN r < 0.55 THEN 4
+      WHEN r < 0.70 THEN 5
+      WHEN r < 0.80 THEN (random() * 5 + 6)::integer  -- 6-10 заказов
+      WHEN r < 0.90 THEN (random() * 5 + 11)::integer -- 11-15 заказов
+      ELSE (random() * 10 + 21)::integer              -- 21-30 заказов
     END AS orders_count
   FROM (
     SELECT user_id, random() AS r FROM customers
-  ) t
+ ) t
 ),
 expanded AS (
   SELECT user_id, generate_series(1, orders_count) AS n
@@ -148,22 +152,19 @@ orders_candidates AS (
     FROM goods
   ), goods_count AS (
     SELECT COUNT(*) AS cnt FROM goods
-  )
+ )
   SELECT 
     e.user_id,
     ge.good_id
   FROM expanded e
-  CROSS JOIN goods_count gc
+ CROSS JOIN goods_count gc
   JOIN goods_enum ge
     ON ge.rn = 1 + (((hashtext(e.user_id::text || ':' || e.n::text)) & 2147483647) % gc.cnt)
-),
-limited_orders AS (
-  SELECT user_id, good_id
-  FROM orders_candidates
-  ORDER BY random()
-  LIMIT 500000
 )
-SELECT user_id, good_id FROM limited_orders;
+SELECT user_id, good_id
+FROM orders_candidates
+ORDER BY random()
+LIMIT 3500000;  -- Увеличено до 3.5 миллионов
 
 -- Генерация истории покупок (дублирует данные из заказов, но с дополнительной структурой)
 INSERT INTO purchase_history (user_id, order_id)
@@ -171,7 +172,8 @@ SELECT
   user_id,
   id
 FROM orders
-WHERE random() < 0.8; -- 80% заказов попадают в историю
+ORDER BY random()
+LIMIT 300000; -- Ограничение до 3 миллионов записей для разнообразия
 
 -- Генерация пунктов выдачи (200 записей)
 INSERT INTO pickup_points (addr_id)
