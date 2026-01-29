@@ -164,7 +164,7 @@ orders_candidates AS (
 SELECT user_id, good_id
 FROM orders_candidates
 ORDER BY random()
-LIMIT 3500000;  -- Увеличено до 3.5 миллионов
+LIMIT 100000;  -- Увеличено до 3.5 миллионов
 
 -- Генерация истории покупок (дублирует данные из заказов, но с дополнительной структурой)
 INSERT INTO purchase_history (user_id, order_id)

@@ -108,9 +108,61 @@ services:
     depends_on:
       - prometheus
 
+  mongodb:
+    image: mongo:6
+    container_name: marketplace-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: 123
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongodb-init.js:/docker-entrypoint-initdb.d/mongodb-init.js:ro
+    command: ["mongod", "--auth"]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    # MongoDB exporter для сбора метрик
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40
+    container_name: mongodb-exporter
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: "mongodb://admin:123@mongodb:27017/?authSource=admin"
+    ports:
+      - "9216:9216"
+    depends_on:
+      - mongodb
+
+  mongo-migrator:
+    image: mongo:6  # ← используем официальный образ MongoDB
+    container_name: mongo-migrator
+    depends_on:
+      - postgres
+      - mongodb
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: admin
+      PGPASSWORD: 123
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_USER: admin
+      MONGO_PASS: 123
+    volumes:
+      - ./migrate-products-to-mongo.sh:/migrate.sh
+    entrypoint: ["bash", "-c", "sleep 30 && apt-get update && apt-get install -y postgresql-client && chmod +x /migrate.sh && /migrate.sh"]
+
 volumes:
   postgres_data:
   postgres_data_sub:
   backups_data:
   prometheus_data:
   grafana_data:
+  mongodb_data:  
