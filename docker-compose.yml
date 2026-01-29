@@ -159,10 +159,39 @@ services:
       - ./migrate-products-to-mongo.sh:/migrate.sh
     entrypoint: ["bash", "-c", "sleep 30 && apt-get update && apt-get install -y postgresql-client && chmod +x /migrate.sh && /migrate.sh"]
 
+  redis:
+    image: redis:7-alpine
+    container_name: marketplace-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  api:
+    build: ./api
+    container_name: marketplace-api
+    restart: unless-stopped
+    ports:
+      - "4000:400"
+    environment:
+      MONGODB_URI: "mongodb://admin:123@mongodb:27017/marketplace?authSource=admin"
+      REDIS_URL: "redis://redis:6379"
+      PORT: 4000
+    depends_on:
+      - mongodb
+      - redis
+
 volumes:
   postgres_data:
   postgres_data_sub:
   backups_data:
   prometheus_data:
   grafana_data:
-  mongodb_data:  
+  mongodb_data:
+  redis_data:

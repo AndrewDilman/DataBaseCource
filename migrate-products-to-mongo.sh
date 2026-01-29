@@ -52,6 +52,11 @@ db = db.getSiblingDB("marketplace");
 db.products.createIndex({ good_id: 1 }, { unique: true });
 db.products.createIndex({ merchant_id: 1 });
 db.products.createIndex({ category_id: 1 });
+db.products.createIndex({ category_id: 1, merchant_id: 1 });
+db.products.createIndex(
+  { category_id: 1, name: 1 },
+  { name: "idx_category_name", partialFilterExpression: { category_id: { $gt: 0 } } }
+);
 EOF
 
 echo "Готово! Перенесено:"
