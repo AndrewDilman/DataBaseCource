@@ -97,3 +97,15 @@ SELECT
 FROM goods g
 JOIN users u ON g.merch_id = u.user_id
 JOIN categories c ON g.caty_id = c.caty_id;
+
+-- РЕПЛИКАЦИЯ
+DO $$
+BEGIN
+    IF NOT EXISTS (
+    -- проверяем, если нет публикации
+        SELECT 1 FROM pg_publication WHERE pubname = 'marketplace_all_tables'
+    ) THEN
+    -- логическая репликация всех таблиц
+        EXECUTE 'CREATE PUBLICATION marketplace_all_tables FOR TABLE addresses, categories, users, goods, orders, reviews, purchase_history, pickup_points, warehouses';
+    END IF;
+END $$;

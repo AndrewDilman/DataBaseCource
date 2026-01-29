@@ -108,7 +108,7 @@ analysis/
 performance_reports/
 
 # Документация (если генерируется автоматически)
-docs/generated/
+docs/
 api_docs/
 
 # ===========================================
