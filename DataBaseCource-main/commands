@@ -1,0 +1,15 @@
+psql -h localhost -U admin -d marketplace -f 
+
+
+# Остановить и удалить всё
+docker-compose down -v
+
+# Удалить все связанные volumes
+docker volume rm postgres_data
+
+# Удалить все неиспользуемые ресурсы
+docker system prune -a -f
+
+# Проверить, что ничего не осталось
+docker ps -a
+docker volume ls

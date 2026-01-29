@@ -1,0 +1,197 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    container_name: marketplace-db
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123
+      # Настройки для экспортера метрик
+      POSTGRES_EXPORTER_PG_USER: admin
+      POSTGRES_EXPORTER_PG_PASSWORD: 123
+    ports:
+      - "5433:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./generate_big_data.sql:/docker-entrypoint-initdb.d/02_generate_big_data.sql
+    command: ["postgres",
+              "-c", "wal_level=logical",
+              "-c", "max_wal_senders=10",
+              "-c", "max_replication_slots=10",
+              "-c", "shared_preload_libraries=pg_stat_statements"]
+    
+
+  postgres_subscriber:
+    image: postgres:15
+    container_name: marketplace-subscriber
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data_sub:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/00_init_schema.sql
+      # Создание подписки после создания схемы
+      - ./sub_create_subscription.sql:/docker-entrypoint-initdb.d/10_sub_create_subscription.sql
+    command: ["bash", "-c", "sleep 60 && docker-entrypoint.sh postgres -c 'wal_level=logical' -c 'max_wal_senders=10' -c 'max_replication_slots=10'"]
+
+  backup:
+    image: postgres:15
+    container_name: marketplace-backup
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: admin
+      PGPASSWORD: 123
+      POSTGRES_DB: marketplace
+      CRON_MODE: loop
+    volumes:
+      - ./backup:/opt/backup:ro
+      - backups_data:/backups
+      - postgres_data:/var/lib/postgresql/data:ro
+    entrypoint: ["bash", "-c", "sleep 90 && bash /opt/backup/backup.sh"]
+
+  # PostgreSQL exporter для сбора метрик
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://admin:123@postgres:5432/marketplace?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - postgres
+
+  # Prometheus сервер для сбора метрик
+  prometheus:
+    image: prom/prometheus:v2.40.0
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - postgres-exporter
+
+  # Grafana для визуализации метрик
+  grafana:
+    image: grafana/grafana-enterprise
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+
+  mongodb:
+    image: mongo:6
+    container_name: marketplace-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: 123
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongodb-init.js:/docker-entrypoint-initdb.d/mongodb-init.js:ro
+    command: ["mongod", "--auth"]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    # MongoDB exporter для сбора метрик
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40
+    container_name: mongodb-exporter
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: "mongodb://admin:123@mongodb:27017/?authSource=admin"
+    ports:
+      - "9216:9216"
+    depends_on:
+      - mongodb
+
+  mongo-migrator:
+    image: mongo:6  # ← используем официальный образ MongoDB
+    container_name: mongo-migrator
+    depends_on:
+      - postgres
+      - mongodb
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: admin
+      PGPASSWORD: 123
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_USER: admin
+      MONGO_PASS: 123
+    volumes:
+      - ./migrate-products-to-mongo.sh:/migrate.sh
+    entrypoint: ["bash", "-c", "sleep 30 && apt-get update && apt-get install -y postgresql-client && chmod +x /migrate.sh && /migrate.sh"]
+
+  redis:
+    image: redis:7-alpine
+    container_name: marketplace-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  api:
+    build: ./api
+    container_name: marketplace-api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      MONGODB_URI: "mongodb://admin:123@mongodb:27017/marketplace?authSource=admin"
+      REDIS_URL: "redis://redis:6379"
+      PORT: 4000
+    depends_on:
+      - mongodb
+      - redis
+
+volumes:
+  postgres_data:
+  postgres_data_sub:
+  backups_data:
+  prometheus_data:
+  grafana_data:
+  mongodb_data:
+  redis_data:  
