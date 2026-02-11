@@ -187,7 +187,48 @@ services:
       - mongodb
       - redis
 
+  neo4j:
+    image: neo4j:5
+    container_name: marketplace-neo4j
+    depends_on:
+      - postgres
+    environment:
+      NEO4J_AUTH: neo4j/12345678
+      NEO4JLABS_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_security_procedures_allowlist: apoc.*
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      # Инициализация пользователей
+      - ./neo4j/neo4j-init.cypher:/docker-entrypoint-initdb.d/01-init.cypher
+    
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "12345678", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # neo4j-migrator:
+  #   image: neo4j:5
+  #   container_name: neo4j-migrator
+  #   depends_on:
+  #     - postgres
+  #     - neo4j
+  #   volumes:
+  #     - ./neo4j/migrate.sh:/migrate.sh
+  #     - ./neo4j/neo4j-init.cypher:/import/init.cypher
+  #     - ./neo4j/migrate-from-postgres.cypher:/import/migrate.cypher
+  #     - ./neo4j/postgresql-42.7.4.jar:/var/lib/neo4j/import/jdbc/postgresql-jdbc.jar
+  #   entrypoint: ["bash", "/migrate.sh"]
+    
 volumes:
+  neo4j_data:
+  neo4j_logs:
   postgres_data:
   postgres_data_sub:
   backups_data:

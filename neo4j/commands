@@ -1,0 +1,2 @@
+docker exec marketplace-neo4j cypher-shell -u neo4j -p 12345678 "MATCH (n) DETACH DELETE n;"
+docker exec marketplace-neo4j cypher-shell -u neo4j -p 12345678 "MATCH (n) RETURN count(n);"

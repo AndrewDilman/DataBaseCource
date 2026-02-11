@@ -1,0 +1,2 @@
+wget -O postgresql-42.7.4.jar https://jdbc.postgresql.org/download/postgresql-42.7.4.jar
+в этой папке
