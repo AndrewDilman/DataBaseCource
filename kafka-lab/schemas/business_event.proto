@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package lab.kafka.events;
+
+option java_package = "lab.kafka.events.proto";
+option java_multiple_files = true;
+
+// Метаданные сообщения (корреляция, источник схемы).
+message EventMetadata {
+  string correlation_id = 1;
+  string producer = 2;
+  string schema_hint = 3;
+}
+
+// Единый конверт бизнес-события (Protobuf v3).
+// В лаборатории payload в JSON — map<string,any>; здесь — JSON-строка для совместимости с Connect/Schema Registry.
+message BusinessEventEnvelope {
+  string event_id = 1;
+  string event_type = 2;
+  string entity_id = 3;
+  string timestamp = 4;
+  string source = 5;
+  string payload_json = 6;
+  string version = 7;
+  EventMetadata metadata = 8;
+}

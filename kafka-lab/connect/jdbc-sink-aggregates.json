@@ -1,0 +1,19 @@
+{
+  "name": "jdbc-sink-aggregates",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "business.events.aggregated",
+    "connection.url": "jdbc:postgresql://postgres-kafka:5432/kafkalab",
+    "connection.user": "kafka",
+    "connection.password": "kafka",
+    "insert.mode": "upsert",
+    "pk.mode": "record_value",
+    "pk.fields": "event_type,window_start",
+    "table.name.format": "stream_aggregate_sink",
+    "auto.create": "false",
+    "db.timezone": "UTC",
+    "errors.tolerance": "all",
+    "errors.log.enable": "true"
+  }
+}

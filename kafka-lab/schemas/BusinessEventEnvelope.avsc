@@ -1,0 +1,31 @@
+{
+  "type": "record",
+  "name": "BusinessEventEnvelope",
+  "namespace": "lab.kafka.events",
+  "doc": "Единый конверт бизнес-события (Avro). В рантайме лаборатории используется JSON с теми же полями.",
+  "fields": [
+    { "name": "eventId", "type": "string" },
+    { "name": "eventType", "type": "string" },
+    { "name": "entityId", "type": "string" },
+    { "name": "timestamp", "type": "string" },
+    { "name": "source", "type": "string" },
+    {
+      "name": "payload",
+      "type": "string",
+      "doc": "JSON-строка тела payload (эквивалент объекта в JSON-конверте)."
+    },
+    { "name": "version", "type": "string", "default": "1.0" },
+    {
+      "name": "metadata",
+      "type": {
+        "type": "record",
+        "name": "EventMetadata",
+        "fields": [
+          { "name": "correlationId", "type": "string" },
+          { "name": "producer", "type": "string", "default": "unknown" },
+          { "name": "schemaHint", "type": "string", "default": "avro+v1" }
+        ]
+      }
+    }
+  ]
+}
