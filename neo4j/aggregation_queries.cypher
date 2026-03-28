@@ -42,3 +42,34 @@ RETURN u.type AS userType,
        count{ (u)-[:SOLD_BY]->() } AS sellerConnections,
        count{ (u)<-[:SOLD_BY]-() } AS buyerConnections
 ORDER BY userCount DESC;
+
+
+==============================================================
+
+// Собираем категории для каждого продавца
+MATCH (m1:User {type: 'merchant'})-[:SOLD_BY]-(p:Product)-[:IN_CATEGORY]->(c:Category)
+WITH m1, COLLECT(DISTINCT c.categoryId) AS cats1
+WHERE SIZE(cats1) > 0   // исключаем продавцов без товаров
+
+// Для каждого продавца ищем других продавцов
+MATCH (m2:User {type: 'merchant'})-[:SOLD_BY]-(p2:Product)-[:IN_CATEGORY]->(c2:Category)
+WHERE m1 <> m2
+WITH m1, cats1, m2, COLLECT(DISTINCT c2.categoryId) AS cats2
+WHERE SIZE(cats2) > 0
+
+// Вычисляем пересечение и объединение
+WITH m1, m2,
+     SIZE([x IN cats1 WHERE x IN cats2]) AS intersection,
+     cats1, cats2
+WITH m1, m2, intersection,
+     SIZE(cats1) + SIZE(cats2) - intersection AS union
+WHERE union > 0
+
+// Возвращаем результат с сортировкой по убыванию сходства
+RETURN m1.name AS seller1,
+       m2.name AS seller2,
+       intersection AS commonCategories,
+       union AS totalCategories,
+       (intersection * 1.0 / union) AS similarity
+ORDER BY similarity DESC, intersection DESC
+LIMIT 10;
