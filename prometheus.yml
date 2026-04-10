@@ -28,3 +28,9 @@ scrape_configs:
       - targets: ['mongodb-exporter:9216']
     scrape_interval: 5s
     scrape_timeout: 4s
+
+  - job_name: 'neo4j'
+    static_configs:
+      - targets: ['neo4j:2004']   # имя сервиса из docker-compose + порт метрик
+    scrape_interval: 5s
+    scrape_timeout: 4s
