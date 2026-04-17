@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../init.sql:/docker-entrypoint-initdb.d/01-init.sql
-      - ../generate_medium_data.sql:/docker-entrypoint-initdb.d/02-generate-data.sql
+      - ./generate_medium_data.sql:/docker-entrypoint-initdb.d/02-generate-data.sql
     networks:
       - marketplace_network
     healthcheck:

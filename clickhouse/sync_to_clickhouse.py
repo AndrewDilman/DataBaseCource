@@ -27,15 +27,15 @@ def get_clickhouse_connection():
         database='shop_analytics'
     )
 
-def sync_order_analytics():
-    """Загружает данные заказов с полной информацией в ClickHouse"""
+def sync_order_events():
+    """Загружает существующие заказы из PostgreSQL в ClickHouse как события"""
     pg_conn = get_postgres_connection()
     ch_conn = get_clickhouse_connection()
     
     try:
         pg_cursor = pg_conn.cursor()
         
-        # Получаем все данные о заказах с информацией о товарах, категориях и продавцах
+        # Получаем все заказы с информацией о товарах и категориях
         query = """
         SELECT 
             o.id as order_id,
@@ -43,18 +43,10 @@ def sync_order_analytics():
             g.merch_id as merchant_id,
             g.good_id,
             g.caty_id as category_id,
-            c.name as category_name,
-            u.name as merchant_name,
-            g.name as good_name,
-            COALESCE(r.rating, 0) as rating,
-            CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END as has_review,
-            CURRENT_DATE as order_date,
-            CURRENT_TIMESTAMP as order_timestamp
+            COALESCE(o.created_at, CURRENT_TIMESTAMP) as order_ts,
+            1000.0 as price  -- Заглушка для цены, если нет поля
         FROM orders o
         JOIN goods g ON o.good_id = g.good_id
-        JOIN categories c ON g.caty_id = c.caty_id
-        JOIN users u ON g.merch_id = u.user_id
-        LEFT JOIN reviews r ON o.user_id = r.user_id AND o.good_id = r.good_id
         """
         
         pg_cursor.execute(query)
@@ -63,125 +55,44 @@ def sync_order_analytics():
         if rows:
             # Вставляем данные в ClickHouse
             ch_conn.execute(
-                'INSERT INTO order_analytics VALUES',
+                'INSERT INTO order_events VALUES',
                 rows,
                 settings={'max_insert_threads': 2}
             )
-            logger.info(f"✓ Загружено {len(rows)} записей в order_analytics")
+            logger.info(f"✓ Загружено {len(rows)} событий заказов в order_events")
         else:
-            logger.info("Нет новых заказов для загрузки")
+            logger.info("Нет заказов для загрузки")
         
         pg_cursor.close()
         
     except Exception as e:
-        logger.error(f"Ошибка при синхронизации order_analytics: {e}")
+        logger.error(f"Ошибка при синхронизации order_events: {e}")
     finally:
         pg_conn.close()
 
-def sync_category_stats():
-    """Загружает агрегированные статистики по категориям"""
+def sync_review_events():
+    """Загружает существующие отзывы из PostgreSQL в ClickHouse как события"""
     pg_conn = get_postgres_connection()
     ch_conn = get_clickhouse_connection()
     
     try:
         pg_cursor = pg_conn.cursor()
         
+        # Получаем все отзывы с информацией о товарах и категориях
         query = """
         SELECT 
-            CURRENT_DATE as date,
-            c.caty_id as category_id,
-            c.name as category_name,
-            COUNT(o.id) as orders_count,
-            COALESCE(AVG(r.rating), 0) as avg_rating,
-            COUNT(CASE WHEN r.id IS NOT NULL THEN 1 END) as reviewed_count
-        FROM categories c
-        LEFT JOIN goods g ON c.caty_id = g.caty_id
-        LEFT JOIN orders o ON g.good_id = o.good_id
-        LEFT JOIN reviews r ON o.user_id = r.user_id AND o.good_id = r.good_id
-        GROUP BY c.caty_id, c.name
-        """
-        
-        pg_cursor.execute(query)
-        rows = pg_cursor.fetchall()
-        
-        if rows:
-            ch_conn.execute(
-                'INSERT INTO category_daily_stats VALUES',
-                rows,
-                settings={'max_insert_threads': 2}
-            )
-            logger.info(f"✓ Загружено {len(rows)} записей в category_daily_stats")
-        
-        pg_cursor.close()
-        
-    except Exception as e:
-        logger.error(f"Ошибка при синхронизации category_daily_stats: {e}")
-    finally:
-        pg_conn.close()
-
-def sync_merchant_stats():
-    """Загружает статистику по продавцам"""
-    pg_conn = get_postgres_connection()
-    ch_conn = get_clickhouse_connection()
-    
-    try:
-        pg_cursor = pg_conn.cursor()
-        
-        query = """
-        SELECT 
-            CURRENT_DATE as date,
-            u.user_id as merchant_id,
-            u.name as merchant_name,
-            COUNT(o.id) as orders_count,
-            COALESCE(AVG(r.rating), 0) as avg_rating,
-            COUNT(CASE WHEN r.id IS NOT NULL THEN 1 END) as reviewed_orders
-        FROM users u
-        LEFT JOIN goods g ON u.user_id = g.merch_id
-        LEFT JOIN orders o ON g.good_id = o.good_id
-        LEFT JOIN reviews r ON o.user_id = r.user_id AND o.good_id = r.good_id
-        WHERE u.user_type = 'merchant'
-        GROUP BY u.user_id, u.name
-        """
-        
-        pg_cursor.execute(query)
-        rows = pg_cursor.fetchall()
-        
-        if rows:
-            ch_conn.execute(
-                'INSERT INTO merchant_daily_stats VALUES',
-                rows,
-                settings={'max_insert_threads': 2}
-            )
-            logger.info(f"✓ Загружено {len(rows)} записей в merchant_daily_stats")
-        
-        pg_cursor.close()
-        
-    except Exception as e:
-        logger.error(f"Ошибка при синхронизации merchant_daily_stats: {e}")
-    finally:
-        pg_conn.close()
-
-def sync_product_stats():
-    """Загружает статистику по товарам"""
-    pg_conn = get_postgres_connection()
-    ch_conn = get_clickhouse_connection()
-    
-    try:
-        pg_cursor = pg_conn.cursor()
-        
-        query = """
-        SELECT 
-            g.good_id,
-            g.name as good_name,
-            g.caty_id as category_id,
+            r.id as review_id,
+            COALESCE(o.id, 0) as order_id,  -- Если нет связи с заказом, ставим 0
+            r.user_id,
+            r.good_id,
             g.merch_id as merchant_id,
-            COUNT(o.id) as total_orders,
-            COALESCE(AVG(r.rating), 0) as avg_rating,
-            COUNT(r.id) as review_count
-        FROM goods g
-        LEFT JOIN orders o ON g.good_id = o.good_id
-        LEFT JOIN reviews r ON g.good_id = r.good_id
-        GROUP BY g.good_id, g.name, g.caty_id, g.merch_id
+            g.caty_id as category_id,
+            r.rating,
+            COALESCE(r.comment, '') as comment,
+            COALESCE(r.created_at, CURRENT_TIMESTAMP) as review_ts
+        FROM reviews r
+        JOIN goods g ON r.good_id = g.good_id
+        LEFT JOIN orders o ON r.user_id = o.user_id AND r.good_id = o.good_id
         """
         
         pg_cursor.execute(query)
@@ -189,29 +100,29 @@ def sync_product_stats():
         
         if rows:
             ch_conn.execute(
-                'INSERT INTO product_stats VALUES',
+                'INSERT INTO review_events VALUES',
                 rows,
                 settings={'max_insert_threads': 2}
             )
-            logger.info(f"✓ Загружено {len(rows)} записей в product_stats")
+            logger.info(f"✓ Загружено {len(rows)} событий отзывов в review_events")
+        else:
+            logger.info("Нет отзывов для загрузки")
         
         pg_cursor.close()
         
     except Exception as e:
-        logger.error(f"Ошибка при синхронизации product_stats: {e}")
+        logger.error(f"Ошибка при синхронизации review_events: {e}")
     finally:
         pg_conn.close()
 
 def full_sync():
-    """Полная синхронизация всех таблиц"""
+    """Полная синхронизация событий из PostgreSQL в ClickHouse"""
     logger.info("=" * 50)
-    logger.info("Начало синхронизации PostgreSQL → ClickHouse")
+    logger.info("Начало синхронизации событий PostgreSQL → ClickHouse")
     logger.info("=" * 50)
     
-    sync_order_analytics()
-    sync_category_stats()
-    sync_merchant_stats()
-    sync_product_stats()
+    sync_order_events()
+    sync_review_events()
     
     logger.info("✓ Синхронизация завершена")
     logger.info("=" * 50)
