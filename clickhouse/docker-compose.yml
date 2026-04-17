@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgresql:
+    image: postgres:15-alpine
+    container_name: marketplace_postgres
+    environment:
+      POSTGRES_DB: marketplace_db
+      POSTGRES_USER: marketplace_user
+      POSTGRES_PASSWORD: marketplace_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ../generate_medium_data.sql:/docker-entrypoint-initdb.d/02-generate-data.sql
+    networks:
+      - marketplace_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketplace_user -d marketplace_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: marketplace_clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./users.xml:/etc/clickhouse-server/users.d/users.xml
+      - ./clickhouse_init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    networks:
+      - marketplace_network
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+
+networks:
+  marketplace_network:
+    driver: bridge
