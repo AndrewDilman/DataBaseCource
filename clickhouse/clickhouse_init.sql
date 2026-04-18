@@ -53,7 +53,7 @@ ENGINE = MergeTree()
 ORDER BY (review_ts, category_id, merchant_id, good_id);
 
 -- Агрегаты по категориям
-CREATE TABLE IF NOT EXISTS shop_analytics.order_analytics
+CREATE TABLE IF NOT EXISTS shop_analytics.category_daily_stats
 (
     date Date,
     category_id UInt32,
@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS shop_analytics.order_analytics
     review_count UInt64
 )
 ENGINE = SummingMergeTree()
-ORDER BY (date, category_id);
+ORDER BY (date, category_id)
+PARTITION BY toYYYYMM(date)
+TTL date + INTERVAL 30 DAY;
 
 -- Агрегаты по продавцам
 CREATE TABLE IF NOT EXISTS shop_analytics.merchant_daily_stats
